@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سوپر ماریو دونده</title>
+    <style>
+        *,
+        *::before,
+        *::after {
+            padding: 0;
+            margin: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: gray;
+            overflow-x: hidden;
+        }
+
+        main {
+            width: 10000px;
+            height: 100vh;
+            background-image: url(img/860645.png);
+            background-size: contain;
+            position: absolute;
+            top: 0;
+            left: 0;
+            animation: leftLine linear 50s forwards 1s;
+
+        }
+
+        .line {
+            width: 10000px;
+            height: 10px;
+            background-color: brown;
+            position: absolute;
+            left: 0;
+            bottom: 85px;
+
+        }
+
+        .block {
+            width: 50px;
+            position: absolute;
+            bottom: 0;
+            background-image: url(/img/aa.jpg);
+        }
+
+        .super {
+            width: 200px;
+            height: 300px;
+            background-image: url(img/supoer.png);
+            background-size: cover;
+            position: absolute;
+            bottom: 85px;
+            left: 50px;
+            animation: leftSuper linear 50s forwards 1s;
+            transition: all 0.3s ease;
+        }
+
+        .super.crash {
+            filter: brightness(1.5) sepia(1) hue-rotate(0deg) saturate(5);
+            transform: scale(0.9) rotate(5deg);
+            opacity: 0.8;
+        }
+
+        @keyframes leftSuper {
+            to {
+                left: 10000px
+            }
+        }
+
+        @keyframes leftLine {
+            to {
+                left: -10000px
+            }
+        }
+
+        .jump {
+            bottom: 400px !important;
+        }
+
+        #muteBtn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: #e52525;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 1000;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        #score {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 1000;
+            text-shadow: 2px 2px 0 black;
+        }
+
+        .countdown {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 72px;
+            color: white;
+            font-weight: bold;
+            text-shadow: 4px 4px 0 red;
+            z-index: 2000;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="score">score: <span id="scoreValue">0</span></div>
+    <button id="muteBtn">🔊 mute</button>
+    <div class="countdown" id="countdown">3</div>
+
+    <main>
+        <div class="line"></div>
+        <div class="super"></div>
+    </main>
+
+    <script>
+        const line = document.querySelector('.line')
+        const _super = document.querySelector('.super')
+        const _main = document.querySelector('main')
+        const muteBtn = document.getElementById('muteBtn')
+        const scoreSpan = document.getElementById('scoreValue')
+        const countdownEl = document.getElementById('countdown')
+        
+        const blocks = []
+        let min = 200
+        let max = 800
+        let score = 0
+        let isMuted = false
+        let gameRunning = true
+        let crashOccurred = false
+
+        let audioContext;
+        let bgMusicInterval;
+
+        function initAudio() {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            } catch(e) {
+                console.log('Web Audio API پشتیبانی نمی‌شود');
+            }
+        }
+
+        function playNote(frequency, duration, type = 'square', volume = 0.1) {
+            if (!audioContext || isMuted) return;
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.type = type;
+            oscillator.frequency.value = frequency;
+            gainNode.gain.value = volume;
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        // آهنگ ماریو
+        function playMarioTheme() {
+            if (!gameRunning) return;
+            
+            
+            let time = 0;
+            notes.forEach((freq, index) => {
+                setTimeout(() => {
+                    if (gameRunning) {
+                        playNote(freq, durations[index], 'square', 0.05);
+                    }
+                }, time * 1000);
+                time += durations[index];
+            });
+        }
+
+        function playCrashSound() {
+            if (!audioContext || isMuted) return;
+            
+            for (let i = 0; i < 3; i++) {
+                setTimeout(() => {
+                    playNote(200 - i*30, 0.1, 'sawtooth', 0.15);
+                }, i * 50);
+            }
+            
+            setTimeout(() => {
+                playNote(100, 0.3, 'sawtooth', 0.2);
+            }, 150);
+        }
+
+        function playJumpSound() {
+            if (!audioContext || isMuted) return;
+            playNote(523, 0.1, 'sine', 0.1);
+            setTimeout(() => playNote(784, 0.1, 'sine', 0.1), 50);
+        }
+
+        function createBlocks() {
+            const oldBlocks = document.querySelectorAll('.block');
+            oldBlocks.forEach(block => block.remove());
+            blocks.length = 0;
+            
+            for (let i = 0; i < 10; i++) {
+                let _rand = (Math.floor(Math.random() * (max - min))) + min
+                let temp = +(i + '000') + _rand
+                blocks.push(temp)
+                
+                let _div = document.createElement('div')
+                _div.classList.add('block')
+                _div.style.height = ((Math.floor(Math.random() * 100)) + 100) + 'px'
+                _div.style.left = temp + 'px'
+                line.appendChild(_div)
+            }
+            console.log('بلوک‌ها:', blocks);
+        }
+
+        function resetGame() {
+            gameRunning = false;
+            
+            countdownEl.style.display = 'block';
+            let count = 3;
+            
+            const countInterval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdownEl.textContent = count;
+                } else if (count === 0) {
+                    countdownEl.textContent = 'start';
+                } else {
+                    clearInterval(countInterval);
+                    countdownEl.style.display = 'none';
+                    
+                    location.reload(); 
+                }
+            }, 1000);
+        }
+
+        function initGame() {
+            initAudio();
+            createBlocks();
+            
+            bgMusicInterval = setInterval(() => {
+                if (gameRunning && !isMuted) {
+                    playMarioTheme();
+                }
+            }, 9000);   
+            
+            
+            document.body.addEventListener('click', function startMusic() {
+                if (audioContext && audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+                playMarioTheme();
+                document.body.removeEventListener('click', startMusic);
+            }, { once: true });
+        }
+
+        
+        muteBtn.addEventListener('click', () => {
+            isMuted = !isMuted;
+            muteBtn.textContent = isMuted ? '🔇 Unmute' : '🔊 mute';
+        });
+
+        
+        window.addEventListener('keyup', (e) => {
+            if ((e.keyCode || e.which) == 32 && gameRunning) {
+                _super.classList.add('jump')
+                playJumpSound()
+                
+                setTimeout(() => {
+                    _super.classList.remove('jump')
+                }, 1000);
+            }
+        })
+
+    
+        setInterval(() => {
+            if (!gameRunning) return
+
+            score += 0.5
+            scoreSpan.textContent = Math.floor(score)
+
+            let leftSuper = (_super.computedStyleMap().get('left').value) + 200
+            let bottomSuper = _super.computedStyleMap().get('bottom').value
+            
+            blocks.forEach((val) => {
+                if (leftSuper >= val && leftSuper <= val + 100) {
+                    if (bottomSuper == 85) {
+                        
+                        if (!crashOccurred) {
+                            crashOccurred = true;
+                            gameRunning = false;
+                            
+                            playCrashSound()
+                            
+                            
+                            
+                            score = Math.max(0, score - 50)
+                            scoreSpan.textContent = Math.floor(score)
+                            
+                          
+                            alert(`💥mario crashed! final score: ${Math.floor(score)}`)
+                            
+                            setTimeout(() => {
+                                resetGame();
+                            }, 2000);
+                        }
+                    }
+                }
+            })
+        }, 50)
+
+        initGame();
+
+    </script>
+</body>
+
+</html>
